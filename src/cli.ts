@@ -2,16 +2,16 @@
 /**
  * Figma Community Stats Tracker
  * Usage:
- *   ft --add <URL>              Add tracking
- *   ft --list                   List tracking
+ *   ft --list                   List files
+ *   ft --add <URL>              Add file
+ *   ft --remove                 Remove file
  *   ft --run                    Run collection
- *   ft --remove <ID>            Remove tracking
- *   ft --schedule 09:00,18:00   Set daily schedule
- *   ft --unschedule [HH:MM,...] Cancel schedule
- *   ft --webhook                List all webhooks
- *   ft --webhook add <URL>      Add a webhook 
+ *   ft --schedule               List schedule
+ *   ft --schedule add HH:MM     Add schedule
+ *   ft --schedule remove        Remove schedule
+ *   ft --webhook                List webhooks
+ *   ft --webhook add <URL>      Add webhook
  *   ft --webhook remove         Remove webhook
- *   ft --status                 Check status
  */
 
 import { $ } from "bun";
@@ -245,16 +245,63 @@ async function cmdAdd(url: string): Promise<void> {
   console.log(`Added: ${stats.name}`);
 }
 
-async function cmdRemove(fileId: string): Promise<void> {
+async function cmdRemove(fileId?: string): Promise<void> {
   const data = await loadData();
+  const entries = Object.entries(data);
 
-  if (fileId in data) {
-    const name = data[fileId].name;
-    delete data[fileId];
-    await saveData(data);
-    console.log(`Removed: ${name}`);
-  } else {
-    console.log(`Not found: ${fileId}`);
+  if (entries.length === 0) {
+    console.log("No files to remove");
+    return;
+  }
+
+  // If fileId provided, remove directly
+  if (fileId) {
+    if (fileId in data) {
+      const name = data[fileId].name;
+      delete data[fileId];
+      await saveData(data);
+      console.log(`Removed: ${name}`);
+    } else {
+      console.log(`Not found: ${fileId}`);
+    }
+    return;
+  }
+
+  // Interactive selection
+  console.log("Current files:");
+  entries.forEach(([fid, info], i) => {
+    console.log(`  ${i + 1}. [${fid}] ${info.name.slice(0, 40)}`);
+  });
+  console.log(`  0. Remove all`);
+  console.log("");
+
+  const answer = await promptUser("Enter number(s) to remove (comma-separated, or 0 for all): ");
+
+  if (answer === "0") {
+    await Bun.write(DATA_FILE, JSON.stringify({}, null, 2));
+    console.log("All files removed");
+    return;
+  }
+
+  const indices = answer.split(",").map(s => parseInt(s.trim(), 10) - 1);
+  const validIndices = indices.filter(i => i >= 0 && i < entries.length);
+
+  if (validIndices.length === 0) {
+    console.log("No valid selection. Canceled.");
+    return;
+  }
+
+  const removed: string[] = [];
+  for (const i of validIndices) {
+    const [fid, info] = entries[i];
+    removed.push(info.name);
+    delete data[fid];
+  }
+
+  await saveData(data);
+  console.log(`Removed: ${removed.join(", ")}`);
+  if (Object.keys(data).length > 0) {
+    console.log(`Remaining: ${Object.keys(data).length} file(s)`);
   }
 }
 
@@ -391,18 +438,46 @@ ${intervals}
 }
 
 async function cmdSchedule(timeStr: string): Promise<void> {
-  const times = parseTimeList(timeStr);
+  const newTimes = parseTimeList(timeStr);
 
-  if (!times || times.length === 0) {
+  if (!newTimes || newTimes.length === 0) {
     console.log("Incorrect time format. Use HH:MM (24-hour format)");
     console.log("Multiple times: HH:MM,HH:MM (e.g., 09:00,18:00,21:00)");
     return;
   }
 
+  // Load existing times from plist
+  const plistFile = Bun.file(PLIST_PATH);
+  let existingTimes: { hour: number; minute: number }[] = [];
+  if (await plistFile.exists()) {
+    const content = await plistFile.text();
+    existingTimes = parseTimesFromPlist(content);
+  }
+
+  // Merge and deduplicate times
+  const timeKey = (t: { hour: number; minute: number }) => `${t.hour}:${t.minute}`;
+  const existingKeys = new Set(existingTimes.map(timeKey));
+  const addedTimes: { hour: number; minute: number }[] = [];
+
+  for (const t of newTimes) {
+    if (!existingKeys.has(timeKey(t))) {
+      existingTimes.push(t);
+      addedTimes.push(t);
+    }
+  }
+
+  if (addedTimes.length === 0) {
+    console.log("All times already scheduled");
+    return;
+  }
+
+  // Sort times
+  const times = existingTimes.sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
   // Check if any two times are less than 10 minutes apart
   const minInterval = getMinIntervalMinutes(times);
   if (minInterval < 10) {
-    console.log("\x1b[31mInterval < 10min is likely to cause request failures due to Figma Requset rate limits.\x1b[0m");
+    console.log("\x1b[31mInterval < 10min is likely to cause request failures due to Figma Request rate limits.\x1b[0m");
     const answer = await promptUser("Continue? (y/N): ");
     if (answer.toLowerCase() !== "y" && answer.toLowerCase() !== "yes") {
       console.log("Canceled.");
@@ -437,7 +512,6 @@ async function cmdSchedule(timeStr: string): Promise<void> {
 </dict>
 </plist>`;
 
-  const plistFile = Bun.file(PLIST_PATH);
   if (await plistFile.exists()) {
     await $`launchctl unload ${PLIST_PATH}`.quiet();
   }
@@ -446,11 +520,14 @@ async function cmdSchedule(timeStr: string): Promise<void> {
   const result = await $`launchctl load ${PLIST_PATH}`.quiet().nothrow();
 
   if (result.exitCode === 0) {
-    const timeList = times.map(t =>
+    const addedList = addedTimes.map(t =>
       `${t.hour.toString().padStart(2, "0")}:${t.minute.toString().padStart(2, "0")}`
     ).join(", ");
-    console.log(`Set at ${timeList}`);
-    console.log(`Logs: ${logPath}`);
+    const allList = times.map(t =>
+      `${t.hour.toString().padStart(2, "0")}:${t.minute.toString().padStart(2, "0")}`
+    ).join(", ");
+    console.log(`Added: ${addedList}`);
+    console.log(`All: ${allList}`);
   } else {
     console.log(`Set failed: ${result.stderr.toString()}`);
   }
@@ -725,20 +802,204 @@ async function cmdWebhook(action?: string, url?: string): Promise<void> {
   console.log("Usage: ft --webhook [add|remove] [URL]");
 }
 
-function printHelp(): void {
-  console.log(`Figma Community Stats Tracker
+async function getScheduledTimes(): Promise<string[]> {
+  const plistFile = Bun.file(PLIST_PATH);
+  if (!(await plistFile.exists())) return [];
 
-Usage:
-  ft --add <URL>              Add tracking (e.g., https://www.figma.com/community/file/xxxxxx)
-  ft --list                   List tracking
-  ft --run                    Run collection
-  ft --remove <ID>            Remove tracking
-  ft --schedule HH:MM[,...]   Set daily schedule (e.g., 09:00 or 09:00,18:00,21:00)
-  ft --unschedule [HH:MM,...] Cancel schedule
-  ft --webhook                List all webhooks
-  ft --webhook add <URL>      Add a webhook
-  ft --webhook remove         Remove webhook
-  ft --schedule status        Check running tasks status
+  const result = await $`launchctl list com.tracker.figma`.quiet().nothrow();
+  if (result.exitCode !== 0) return [];
+
+  const content = await plistFile.text();
+  const times = parseTimesFromPlist(content);
+  return times.map(t => {
+    const h = t.hour.toString().padStart(2, "0");
+    const m = t.minute.toString().padStart(2, "0");
+    return `${h}:${m}`;
+  });
+}
+
+// ANSI color codes
+const GREEN = "\x1b[32m";
+const RESET = "\x1b[0m";
+const BOLD = "\x1b[1m";
+const DIM = "\x1b[2m";
+
+function getDisplayWidth(str: string): number {
+  // Remove ANSI codes for width calculation
+  const plain = str.replace(/\x1b\[[0-9;]*m/g, "");
+  // Count wide characters (CJK) as 2
+  let width = 0;
+  for (const char of plain) {
+    const code = char.charCodeAt(0);
+    if (code >= 0x4e00 && code <= 0x9fff) {
+      width += 2;
+    } else {
+      width += 1;
+    }
+  }
+  return width;
+}
+
+function padEnd(str: string, width: number): string {
+  const currentWidth = getDisplayWidth(str);
+  const padding = width - currentWidth;
+  return str + " ".repeat(Math.max(0, padding));
+}
+
+function getTerminalWidth(): number {
+  return process.stdout.columns || 80;
+}
+
+function printSimpleList(cols: { title: string; items: string[]; more?: string }[]): void {
+  const MAX_DISPLAY = 5;
+
+  for (const col of cols) {
+    const items = col.items.slice(0, MAX_DISPLAY);
+    const hasMore = col.items.length > MAX_DISPLAY;
+
+    console.log(`${GREEN}${col.title}${RESET}`);
+    if (items.length === 0 || (items.length === 1 && (items[0] === "None" || items[0] === "Not set"))) {
+      console.log(`  ${DIM}${items[0] || "None"}${RESET}`);
+    } else {
+      items.forEach(item => console.log(`  ${item}`));
+      if (hasMore && col.more) {
+        console.log(`  ${DIM}... ${col.more}${RESET}`);
+      }
+    }
+    console.log("");
+  }
+}
+
+function truncateStr(str: string, maxWidth: number): string {
+  if (getDisplayWidth(str) <= maxWidth) return str;
+
+  let truncated = "";
+  let width = 0;
+  for (const char of str) {
+    const charWidth = char.charCodeAt(0) >= 0x4e00 && char.charCodeAt(0) <= 0x9fff ? 2 : 1;
+    if (width + charWidth > maxWidth - 2) break;
+    truncated += char;
+    width += charWidth;
+  }
+  return truncated + "..";
+}
+
+function printBox(cols: { title: string; items: string[]; more?: string }[]): void {
+  const MAX_DISPLAY = 5;
+  const MIN_WIDTH = 16;
+  const termWidth = getTerminalWidth();
+
+  // Calculate max column width based on terminal (leave room for 3 cols + 4 borders)
+  const maxColWidth = Math.floor((termWidth - 4) / 3);
+
+  // If terminal too narrow for table, use simple list
+  if (maxColWidth < MIN_WIDTH) {
+    printSimpleList(cols);
+    return;
+  }
+
+  // Prepare display items for each column (with truncation)
+  const displayCols = cols.map(col => {
+    const items = col.items.slice(0, MAX_DISPLAY).map(item => truncateStr(item, maxColWidth - 2));
+    if (col.items.length > MAX_DISPLAY && col.more) {
+      items.push(`${DIM}${col.more}${RESET}`);
+    }
+    return { title: col.title, items };
+  });
+
+  // Calculate column widths based on content (capped at maxColWidth)
+  const colWidths = displayCols.map(col => {
+    const titleWidth = getDisplayWidth(col.title) + 2;
+    const maxItemWidth = Math.max(...col.items.map(item => getDisplayWidth(item) + 2));
+    return Math.min(maxColWidth, Math.max(MIN_WIDTH, titleWidth, maxItemWidth));
+  });
+
+  // Calculate max rows
+  const maxRows = Math.max(...displayCols.map(c => c.items.length), 1);
+
+  // Box drawing
+  const h = "─";
+  const v = "│";
+  const tl = "┌"; const tr = "┐";
+  const bl = "└"; const br = "┘";
+  const tm = "┬"; const bm = "┴";
+  const lm = "├"; const rm = "┤";
+  const cross = "┼";
+
+  const colLines = colWidths.map(w => h.repeat(w));
+
+  // Top border
+  console.log(`${GREEN}${tl}${colLines[0]}${tm}${colLines[1]}${tm}${colLines[2]}${tr}${RESET}`);
+
+  // Header row
+  const headers = displayCols.map((c, i) => ` ${BOLD}${c.title}${RESET}`);
+  console.log(`${GREEN}${v}${RESET}${padEnd(headers[0], colWidths[0])}${GREEN}${v}${RESET}${padEnd(headers[1], colWidths[1])}${GREEN}${v}${RESET}${padEnd(headers[2], colWidths[2])}${GREEN}${v}${RESET}`);
+
+  // Header separator
+  console.log(`${GREEN}${lm}${colLines[0]}${cross}${colLines[1]}${cross}${colLines[2]}${rm}${RESET}`);
+
+  // Content rows
+  for (let i = 0; i < maxRows; i++) {
+    const row = displayCols.map((c, colIdx) => {
+      const item = c.items[i] || "";
+      return ` ${item}`;
+    });
+    console.log(`${GREEN}${v}${RESET}${padEnd(row[0], colWidths[0])}${GREEN}${v}${RESET}${padEnd(row[1], colWidths[1])}${GREEN}${v}${RESET}${padEnd(row[2], colWidths[2])}${GREEN}${v}${RESET}`);
+  }
+
+  // Bottom border
+  console.log(`${GREEN}${bl}${colLines[0]}${bm}${colLines[1]}${bm}${colLines[2]}${br}${RESET}`);
+}
+
+async function printHelp(): Promise<void> {
+  console.log(`${BOLD}Figma Community Stats Tracker${RESET}\n`);
+
+  // Load current config summary
+  const data = await loadData();
+  const webhookUrls = await getWebhookUrls();
+  const scheduledTimes = await getScheduledTimes();
+
+  const fileCount = Object.keys(data).length;
+  const webhookCount = webhookUrls.length;
+  const timeCount = scheduledTimes.length;
+
+  // Prepare columns
+  const filesCol = {
+    title: `Files (${fileCount})`,
+    items: fileCount > 0 ? Object.values(data).map(f => f.name) : ["None"],
+    more: "ft --list"
+  };
+
+  const webhooksCol = {
+    title: `Webhooks (${webhookCount})`,
+    items: webhookCount > 0 ? webhookUrls : ["None"],
+    more: "ft --webhook"
+  };
+
+  const scheduleCol = {
+    title: `Schedule (${timeCount})`,
+    items: timeCount > 0 ? scheduledTimes : ["Not set"],
+    more: "ft --schedule"
+  };
+
+  printBox([filesCol, webhooksCol, scheduleCol]);
+
+  console.log(`
+${GREEN}Files${RESET}
+  ft --add <URL>       Add file
+  ft --remove          Remove file
+  ft --list            List files
+  
+  ${GREEN}Schedule${RESET}
+  ft --run                 Run immediately
+  ft --schedule add        Add schedule (e.g. 09:00 or 09:00,18:00)
+  ft --schedule remove     Remove schedule
+  ft --schedule            List schedule
+
+${GREEN}Webhook${RESET}
+  ft --webhook add     Add webhook
+  ft --webhook remove  Remove webhook
+  ft --webhook         List webhooks
   `);
 }
 
@@ -784,43 +1045,47 @@ function parseMultiValueArg(args: string[], flag: string, maxValues: number = 2)
 const args = Bun.argv.slice(2);
 
 // 处理可选值参数
-const unscheduleArg = parseOptionalArg(args, "--unschedule");
+const removeArg = parseOptionalArg(args, "--remove");
+const scheduleArg = parseMultiValueArg(args, "--schedule", 2);
 const webhookArg = parseMultiValueArg(args, "--webhook", 2);
 
 // 过滤掉已处理的参数
-const indicesToFilter = new Set([...unscheduleArg.indices, ...webhookArg.indices]);
+const indicesToFilter = new Set([...removeArg.indices, ...scheduleArg.indices, ...webhookArg.indices]);
 const filteredArgs = args.filter((_, i) => !indicesToFilter.has(i));
 
 const { values, positionals } = parseArgs({
   args: filteredArgs,
   options: {
     add: { type: "string" },
-    remove: { type: "string" },
     list: { type: "boolean" },
     run: { type: "boolean" },
-    schedule: { type: "string" },
-    status: { type: "boolean" },
     help: { type: "boolean" }
   },
   allowPositionals: true
 });
 
-if (values.add) {
-  await cmdAdd(values.add);
-} else if (values.remove) {
-  await cmdRemove(values.remove);
-} else if (values.list) {
+if (values.list) {
   await cmdList();
+} else if (values.add) {
+  await cmdAdd(values.add);
+} else if (removeArg.has) {
+  await cmdRemove(removeArg.value);
 } else if (values.run) {
   await cmdRun();
-} else if (values.schedule) {
-  await cmdSchedule(values.schedule);
-} else if (unscheduleArg.has) {
-  await cmdUnschedule(unscheduleArg.value);
+} else if (scheduleArg.has) {
+  const action = scheduleArg.values[0];
+  if (action === "add") {
+    await cmdSchedule(scheduleArg.values[1]);
+  } else if (action === "remove") {
+    await cmdUnschedule(scheduleArg.values[1]);
+  } else if (action === "status" || !action) {
+    await cmdStatus();
+  } else {
+    // Treat as time string for backward compatibility
+    await cmdSchedule(action);
+  }
 } else if (webhookArg.has) {
   await cmdWebhook(webhookArg.values[0], webhookArg.values[1]);
-} else if (values.status) {
-  await cmdStatus();
 } else {
-  printHelp();
+  await printHelp();
 }

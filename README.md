@@ -38,13 +38,13 @@ bun install && bun run build
 ft --add <URL>              # Add file to track
 ft --remove <ID>            # Remove file
 ft --list                   # List tracked files
-ft --webhook                # List all webhooks
-ft --webhook add <URL>      # Add a webhook
-ft --webhook remove         # Remove webhook
 ft --run                    # Collect stats now
 ft --schedule HH:MM[,...]   # Set schedule (e.g., 09:00 or 09:00,18:00)
 ft --unschedule [HH:MM,...] # Cancel schedule
 ft --status                 # Check status
+ft --webhook                # List all webhooks
+ft --webhook add <URL>      # Add a webhook
+ft --webhook remove         # Remove webhook
 ```
 
 ## Example
