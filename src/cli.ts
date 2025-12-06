@@ -987,7 +987,7 @@ async function printHelp(): Promise<void> {
 
   console.log(`
 ${GREEN}Files${RESET}
-  ft --add <URL>       Add file
+  ft --add <URL>       Add file (e.g. figma.com/community/file/xxxxx)
   ft --remove          Remove file
   ft --list            List files
   
