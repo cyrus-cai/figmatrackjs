@@ -992,12 +992,12 @@ ${GREEN}Files${RESET}
   
   ${GREEN}Schedule${RESET}
   ft --run                 Run immediately
-  ft --schedule add        Add schedule (e.g. 09:00 or 09:00,18:00)
+  ft --schedule add <HH:MM>       Add schedule (e.g. 09:00 or 09:00,18:00)
   ft --schedule remove     Remove schedule
   ft --schedule            List schedule
 
 ${GREEN}Webhook${RESET}
-  ft --webhook add     Add webhook
+  ft --webhook add <URL>    Add webhook
   ft --webhook remove  Remove webhook
   ft --webhook         List webhooks
   `);
