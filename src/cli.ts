@@ -991,7 +991,7 @@ ${GREEN}Files${RESET}
   ft --remove          Remove file
   ft --list            List files
   
-  ${GREEN}Schedule${RESET}
+${GREEN}Schedule${RESET}
   ft --run                 Run immediately
   ft --schedule add <HH:MM>       Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
   ft --schedule remove     Remove schedule
