@@ -7,7 +7,7 @@
  *   ft --remove                 Remove file
  *   ft --run                    Run collection
  *   ft --schedule               List schedule
- *   ft --schedule add HH:MM     Add schedule
+ *   ft --schedule add <HH:MM>   Add schedule (space or comma separated)
  *   ft --schedule remove        Remove schedule
  *   ft --webhook                List webhooks
  *   ft --webhook add <URL>      Add webhook
@@ -372,7 +372,8 @@ function isValidTime24(timeStr: string): boolean {
 }
 
 function parseTimeList(timeStr: string): { hour: number; minute: number }[] | null {
-  const times = timeStr.split(",").map(t => t.trim());
+  // Support both comma and space as separators
+  const times = timeStr.split(/[,\s]+/).map(t => t.trim()).filter(t => t.length > 0);
   const result: { hour: number; minute: number }[] = [];
 
   for (const time of times) {
@@ -442,7 +443,7 @@ async function cmdSchedule(timeStr: string): Promise<void> {
 
   if (!newTimes || newTimes.length === 0) {
     console.log("Incorrect time format. Use HH:MM (24-hour format)");
-    console.log("Multiple times: HH:MM,HH:MM (e.g., 09:00,18:00,21:00)");
+    console.log("Multiple times: HH:MM HH:MM or HH:MM,HH:MM (e.g., 09:00 18:00 or 09:00,18:00)");
     return;
   }
 
@@ -992,7 +993,7 @@ ${GREEN}Files${RESET}
   
   ${GREEN}Schedule${RESET}
   ft --run                 Run immediately
-  ft --schedule add <HH:MM>       Add schedule (e.g. 09:00 or 09:00,18:00)
+  ft --schedule add <HH:MM>       Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
   ft --schedule remove     Remove schedule
   ft --schedule            List schedule
 
@@ -1046,7 +1047,7 @@ const args = Bun.argv.slice(2);
 
 // 处理可选值参数
 const removeArg = parseOptionalArg(args, "--remove");
-const scheduleArg = parseMultiValueArg(args, "--schedule", 2);
+const scheduleArg = parseMultiValueArg(args, "--schedule", 20);
 const webhookArg = parseMultiValueArg(args, "--webhook", 2);
 
 // 过滤掉已处理的参数
@@ -1075,7 +1076,9 @@ if (values.list) {
 } else if (scheduleArg.has) {
   const action = scheduleArg.values[0];
   if (action === "add") {
-    await cmdSchedule(scheduleArg.values[1]);
+    // Join all time arguments with space (supports both space and comma separated)
+    const timeArgs = scheduleArg.values.slice(1).join(" ");
+    await cmdSchedule(timeArgs);
   } else if (action === "remove") {
     await cmdUnschedule(scheduleArg.values[1]);
   } else if (action === "status" || !action) {
