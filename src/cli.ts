@@ -72,6 +72,7 @@ if (!existsSync(FIGMATRACK_DIR)) {
 // ============ 类型定义 ============
 interface Record {
   date: string;
+  timestamp?: string;
   user_count: number;
   like_count: number;
 }
@@ -181,14 +182,11 @@ function calcDiff(records: Record[], todayStats: Stats): Diff {
     compare_date: null
   };
 
-  for (let i = records.length - 1; i >= 0; i--) {
-    const r = records[i];
-    if (r.date !== today) {
-      result.diff_user = todayStats.user_count - r.user_count;
-      result.diff_like = todayStats.like_count - r.like_count;
-      result.compare_date = r.date;
-      break;
-    }
+  if (records.length > 0) {
+    const lastRecord = records[records.length - 1];
+    result.diff_user = todayStats.user_count - lastRecord.user_count;
+    result.diff_like = todayStats.like_count - lastRecord.like_count;
+    result.compare_date = lastRecord.timestamp || lastRecord.date;
   }
 
   return result;
@@ -397,15 +395,12 @@ async function cmdRun(): Promise<void> {
       const diff = calcDiff(info.records, stats);
       const record: Record = {
         date: today,
+        timestamp: getTimestamp(),
         user_count: stats.user_count,
         like_count: stats.like_count
       };
 
-      if (info.records.length > 0 && info.records[info.records.length - 1].date === today) {
-        info.records[info.records.length - 1] = record;
-      } else {
-        info.records.push(record);
-      }
+      info.records.push(record);
 
       const msg = buildMessage(info.name, diff);
       messages.push(msg);
