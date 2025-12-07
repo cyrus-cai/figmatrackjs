@@ -35,23 +35,28 @@ bun install && bun run build
 ## Usage
 
 ```bash
-ft --add <URL>              # Add file to track
-ft --remove <ID>            # Remove file
-ft --list                   # List tracked files
-ft --run                    # Collect stats now
-ft --schedule HH:MM[,...]   # Set schedule (e.g., 09:00 or 09:00,18:00)
-ft --unschedule [HH:MM,...] # Cancel schedule
-ft --status                 # Check status
-ft --webhook                # List all webhooks
-ft --webhook add <URL>      # Add a webhook
-ft --webhook remove         # Remove webhook
+# Files
+ft --add <URL>                # Add file to track
+ft --remove                   # Remove file (interactive)
+ft --list                     # List tracked files
+
+# Schedule
+ft --run                      # Collect stats now
+ft --schedule add <HH:MM>     # Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
+ft --schedule remove          # Remove schedule (interactive)
+ft --schedule                 # List schedule
+
+# Webhook
+ft --webhook add <URL>        # Add a webhook
+ft --webhook remove           # Remove webhook (interactive)
+ft --webhook                  # List webhooks
 ```
 
 ## Example
 
 ```bash
 ft --add https://www.figma.com/community/file/123456789
+ft --schedule add 09:00 21:00
 ft --webhook add https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx
-ft --schedule 09:00,21:00
 ```
 
