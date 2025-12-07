@@ -28,5 +28,5 @@ dist/
 .claude/
 CLAUDE.md
 
-# Data files (optional - remove if you want to track)
+# Data files
 data.json
