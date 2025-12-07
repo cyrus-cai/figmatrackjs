@@ -2,16 +2,21 @@
 /**
  * Figma Community Stats Tracker
  * Usage:
- *   ft --list                   List files
- *   ft --add <URL>              Add file
+ *   # Files
+ *   ft --add <URL>              Add file (e.g. figma.com/community/file/xxxxx)
  *   ft --remove                 Remove file
- *   ft --run                    Run collection
- *   ft --schedule               List schedule
- *   ft --schedule add <HH:MM>   Add schedule (space or comma separated)
+ *   ft --list                   List tracked files
+ *
+ *   # Schedule
+ *   ft --run                    Run immediately
+ *   ft --schedule add <HH:MM>   Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
  *   ft --schedule remove        Remove schedule
- *   ft --webhook                List webhooks
- *   ft --webhook add <URL>      Add webhook
+ *   ft --schedule               List schedule
+ *
+ *   # Webhook
+ *   ft --webhook add <URL>      Add webhook (e.g. URL1 URL2 or URL1,URL2)
  *   ft --webhook remove         Remove webhook
+ *   ft --webhook                List webhooks
  */
 
 import { $ } from "bun";
@@ -219,20 +224,54 @@ function buildMessage(name: string, diff: Diff): string {
 
 // ============ 命令 ============
 
-async function cmdAdd(url: string): Promise<void> {
-  const fileId = extractFileId(url);
-  const stats = await fetchStats(fileId);
-  const data = await loadData();
+function parseUrlList(urlStr: string): string[] {
+  // Support both comma and space as separators
+  return urlStr.split(/[,\s]+/).map(u => u.trim()).filter(u => u.length > 0);
+}
 
-  if (fileId in data) {
-    console.log(`Already Exists: ${fileId}`);
+async function cmdAdd(urlStr: string): Promise<void> {
+  const urls = parseUrlList(urlStr);
+
+  if (urls.length === 0) {
+    console.log("Usage: ft --add <URL> [URL...]");
+    console.log("Multiple URLs: URL1 URL2 or URL1,URL2");
     return;
   }
 
-  // Check if already tracking more than 5 files
+  const data = await loadData();
   const currentCount = Object.keys(data).length;
-  if (currentCount >= 5) {
-    console.log(`\x1b[31mAlready tracking ${currentCount} files. More files may cause Figma request failures.\x1b[0m`);
+
+  // Extract all file IDs first to validate
+  const fileIds: { url: string; fileId: string }[] = [];
+  for (const url of urls) {
+    try {
+      const fileId = extractFileId(url);
+      fileIds.push({ url, fileId });
+    } catch (e) {
+      console.log(`Invalid URL: ${url}`);
+    }
+  }
+
+  if (fileIds.length === 0) {
+    return;
+  }
+
+  // Filter out already existing files
+  const newFiles = fileIds.filter(f => !(f.fileId in data));
+  const existingFiles = fileIds.filter(f => f.fileId in data);
+
+  if (existingFiles.length > 0) {
+    console.log(`Already exists: ${existingFiles.map(f => f.fileId).join(", ")}`);
+  }
+
+  if (newFiles.length === 0) {
+    return;
+  }
+
+  // Check if adding would exceed 5 files
+  const totalAfterAdd = currentCount + newFiles.length;
+  if (totalAfterAdd > 5) {
+    console.log(`\x1b[31mAdding ${newFiles.length} file(s) will result in ${totalAfterAdd} total files. More files may cause Figma request failures.\x1b[0m`);
     const answer = await promptUser("Continue? (y/N): ");
     if (answer.toLowerCase() !== "y" && answer.toLowerCase() !== "yes") {
       console.log("Canceled.");
@@ -240,9 +279,22 @@ async function cmdAdd(url: string): Promise<void> {
     }
   }
 
-  data[fileId] = { name: stats.name, records: [] };
-  await saveData(data);
-  console.log(`Added: ${stats.name}`);
+  // Fetch and add each file
+  const added: string[] = [];
+  for (const { fileId } of newFiles) {
+    try {
+      const stats = await fetchStats(fileId);
+      data[fileId] = { name: stats.name, records: [] };
+      added.push(stats.name);
+    } catch (e) {
+      console.log(`Error fetching ${fileId}: ${e}`);
+    }
+  }
+
+  if (added.length > 0) {
+    await saveData(data);
+    console.log(`Added: ${added.join(", ")}`);
+  }
 }
 
 async function cmdRemove(fileId?: string): Promise<void> {
@@ -770,31 +822,55 @@ async function cmdWebhook(action?: string, url?: string): Promise<void> {
     return;
   }
 
-  // Add webhook
+  // Add webhook (supports multiple URLs)
   if (action === "add") {
     if (!url) {
-      console.log("Usage: ft --webhook add <URL>");
+      console.log("Usage: ft --webhook add <URL> [URL...]");
+      console.log("Multiple URLs: URL1 URL2 or URL1,URL2");
       return;
     }
 
-    // Validate URL format
-    try {
-      new URL(url);
-    } catch {
-      console.log("Invalid URL format");
+    // Parse URL list (url may contain multiple URLs from parseMultiValueArg)
+    const urlList = parseUrlList(url);
+
+    if (urlList.length === 0) {
+      console.log("Usage: ft --webhook add <URL> [URL...]");
       return;
     }
 
-    // Check for duplicates
-    if (webhookUrls.includes(url)) {
-      console.log("Webhook already exists");
+    // Validate and filter URLs
+    const validUrls: string[] = [];
+    const invalidUrls: string[] = [];
+    const duplicateUrls: string[] = [];
+
+    for (const u of urlList) {
+      try {
+        new URL(u);
+        if (webhookUrls.includes(u)) {
+          duplicateUrls.push(u);
+        } else if (!validUrls.includes(u)) {
+          validUrls.push(u);
+        }
+      } catch {
+        invalidUrls.push(u);
+      }
+    }
+
+    if (invalidUrls.length > 0) {
+      console.log(`Invalid URL: ${invalidUrls.join(", ")}`);
+    }
+    if (duplicateUrls.length > 0) {
+      console.log(`Already exists: ${duplicateUrls.join(", ")}`);
+    }
+
+    if (validUrls.length === 0) {
       return;
     }
 
-    webhookUrls.push(url);
+    webhookUrls.push(...validUrls);
     config.webhook_urls = webhookUrls;
     await saveConfig(config);
-    console.log(`Added: ${url}`);
+    console.log(`Added: ${validUrls.join(", ")}`);
     return;
   }
 
@@ -987,20 +1063,20 @@ async function printHelp(): Promise<void> {
 
   console.log(`
 ${GREEN}Files${RESET}
-  ft --add <URL>       Add file (e.g. figma.com/community/file/xxxxx)
-  ft --remove          Remove file
-  ft --list            List files
-  
+  ft --add <URL>              Add file (e.g. figma.com/community/file/xxxxx)
+  ft --remove                 Remove file
+  ft --list                   List tracked files
+
 ${GREEN}Schedule${RESET}
-  ft --run                 Run immediately
-  ft --schedule add <HH:MM>       Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
-  ft --schedule remove     Remove schedule
-  ft --schedule            List schedule
+  ft --run                    Run immediately
+  ft --schedule add <HH:MM>   Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
+  ft --schedule remove        Remove schedule
+  ft --schedule               List schedule
 
 ${GREEN}Webhook${RESET}
-  ft --webhook add <URL>    Add webhook
-  ft --webhook remove  Remove webhook
-  ft --webhook         List webhooks
+  ft --webhook add <URL>      Add webhook (e.g. URL1 URL2 or URL1,URL2)
+  ft --webhook remove         Remove webhook
+  ft --webhook                List webhooks
   `);
 }
 
@@ -1047,17 +1123,17 @@ const args = Bun.argv.slice(2);
 
 // 处理可选值参数
 const removeArg = parseOptionalArg(args, "--remove");
+const addArg = parseMultiValueArg(args, "--add", 20);
 const scheduleArg = parseMultiValueArg(args, "--schedule", 20);
-const webhookArg = parseMultiValueArg(args, "--webhook", 2);
+const webhookArg = parseMultiValueArg(args, "--webhook", 21); // action + up to 20 URLs
 
 // 过滤掉已处理的参数
-const indicesToFilter = new Set([...removeArg.indices, ...scheduleArg.indices, ...webhookArg.indices]);
+const indicesToFilter = new Set([...removeArg.indices, ...addArg.indices, ...scheduleArg.indices, ...webhookArg.indices]);
 const filteredArgs = args.filter((_, i) => !indicesToFilter.has(i));
 
 const { values, positionals } = parseArgs({
   args: filteredArgs,
   options: {
-    add: { type: "string" },
     list: { type: "boolean" },
     run: { type: "boolean" },
     help: { type: "boolean" }
@@ -1067,8 +1143,9 @@ const { values, positionals } = parseArgs({
 
 if (values.list) {
   await cmdList();
-} else if (values.add) {
-  await cmdAdd(values.add);
+} else if (addArg.has) {
+  const urlStr = addArg.values.join(" ");
+  await cmdAdd(urlStr);
 } else if (removeArg.has) {
   await cmdRemove(removeArg.value);
 } else if (values.run) {
@@ -1088,7 +1165,10 @@ if (values.list) {
     await cmdSchedule(action);
   }
 } else if (webhookArg.has) {
-  await cmdWebhook(webhookArg.values[0], webhookArg.values[1]);
+  const action = webhookArg.values[0];
+  // Join all URL arguments with space (supports both space and comma separated)
+  const urlArgs = webhookArg.values.slice(1).join(" ");
+  await cmdWebhook(action, urlArgs || undefined);
 } else {
   await printHelp();
 }

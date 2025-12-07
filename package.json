@@ -1,6 +1,6 @@
 {
   "name": "figmatrackjs",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Figma Community Stats Tracker - Track your Figma Community file stats with ease",
   "type": "module",
   "bin": {
