@@ -36,20 +36,23 @@ bun install && bun run build
 
 ```bash
 # Files
-ft --add <URL>                # Add file to track
-ft --remove                   # Remove file (interactive)
+ft --add <URL>                # Add file (e.g. figma.com/community/file/xxxxx)
+ft --remove                   # Remove file
 ft --list                     # List tracked files
 
 # Schedule
-ft --run                      # Collect stats now
+ft --run                      # Run immediately
 ft --schedule add <HH:MM>     # Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
-ft --schedule remove          # Remove schedule (interactive)
-ft --schedule                 # List schedule
+ft --schedule remove          # Remove schedule
+ft --schedule list            # List schedule
 
 # Webhook
-ft --webhook add <URL>        # Add a webhook
-ft --webhook remove           # Remove webhook (interactive)
-ft --webhook                  # List webhooks
+ft --webhook add <URL>        # Add webhook (e.g. URL1 URL2 or URL1,URL2)
+ft --webhook remove           # Remove webhook
+ft --webhook list             # List webhooks
+
+# Help
+ft --docs                     # Open documentation
 ```
 
 ## Example

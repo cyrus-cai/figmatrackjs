@@ -17,6 +17,9 @@
  *   ft --webhook add <URL>      Add webhook (e.g. URL1 URL2 or URL1,URL2)
  *   ft --webhook remove         Remove webhook
  *   ft --webhook list           List webhooks
+ *
+ *   # Help
+ *   ft --docs                   Open documentation
  */
 
 import { $ } from "bun";
@@ -1076,6 +1079,9 @@ ${GREEN}Webhook${RESET}
   ft --webhook add <URL>      Add webhook (e.g. URL1 URL2 or URL1,URL2)
   ft --webhook remove         Remove webhook
   ft --webhook list           List webhooks
+
+${GREEN}Help${RESET}
+  ft --docs                   Open documentation
   `);
 }
 
@@ -1135,7 +1141,8 @@ const { values, positionals } = parseArgs({
   options: {
     list: { type: "boolean" },
     run: { type: "boolean" },
-    help: { type: "boolean" }
+    help: { type: "boolean" },
+    docs: { type: "boolean" }
   },
   allowPositionals: true
 });
@@ -1167,6 +1174,14 @@ if (values.list) {
   // Join all URL arguments with space (supports both space and comma separated)
   const urlArgs = webhookArg.values.slice(1).join(" ");
   await cmdWebhook(action, urlArgs || undefined);
+} else if (values.docs) {
+  const readmePath = join(FIGMATRACK_DIR, "README.md");
+  const file = Bun.file(readmePath);
+  if (await file.exists()) {
+    Bun.spawn(["open", readmePath]);
+  } else {
+    console.log("Documentation not found. Visit: https://github.com/cyrus-cai/figmatrackjs/blob/main/README.md");
+  }
 } else {
   await printHelp();
 }
