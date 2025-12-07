@@ -3,7 +3,7 @@
  * Figma Community Stats Tracker
  * Usage:
  *   # Files
- *   ft --add <URL>              Add file (e.g. figma.com/community/file/xxxxx)
+ *   ft --add <URL|ID>           Add file (figma community file URL or numeric ID)
  *   ft --remove                 Remove file
  *   ft --list                   List tracked files
  *
@@ -102,10 +102,15 @@ interface Diff {
 
 // ============ 核心函数 ============
 
-function extractFileId(url: string): string {
-  const match = url.match(/community\/file\/(\d+)/);
+function extractFileId(input: string): string {
+  // Support pure numeric ID
+  if (/^\d+$/.test(input)) {
+    return input;
+  }
+  // Support full URL
+  const match = input.match(/community\/file\/(\d+)/);
   if (!match) {
-    throw new Error(`Not a valid figma link: ${url}`);
+    throw new Error(`Invalid input: ${input}`);
   }
   return match[1];
 }
@@ -236,8 +241,8 @@ async function cmdAdd(urlStr: string): Promise<void> {
   const urls = parseUrlList(urlStr);
 
   if (urls.length === 0) {
-    console.log("Usage: ft --add <URL> [URL...]");
-    console.log("Multiple URLs: URL1 URL2 or URL1,URL2");
+    console.log("Usage: ft --add <URL|ID> [URL|ID...]");
+    console.log("Example: ft --add figma.com/community/file/xxxxx or ft --add xxxxx");
     return;
   }
 
@@ -1065,7 +1070,7 @@ async function printHelp(): Promise<void> {
 
   console.log(`
 ${GREEN}Files${RESET}
-  ft --add <URL>              Add file (e.g. figma.com/community/file/xxxxx)
+  ft --add <URL|ID>           Add file (URL or numeric ID)
   ft --remove                 Remove file
   ft --list                   List tracked files
 

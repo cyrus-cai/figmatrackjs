@@ -36,7 +36,7 @@ bun install && bun run build
 
 ```bash
 # Files
-ft --add <URL>                # Add file (e.g. figma.com/community/file/xxxxx)
+ft --add <URL|ID>             # Add file (figma community file URL or numeric ID)
 ft --remove                   # Remove file
 ft --list                     # List tracked files
 
