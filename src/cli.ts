@@ -302,7 +302,7 @@ async function cmdRemove(fileId?: string): Promise<void> {
   const entries = Object.entries(data);
 
   if (entries.length === 0) {
-    console.log("No files to remove");
+    console.log("Not configured");
     return;
   }
 
@@ -361,7 +361,7 @@ async function cmdList(): Promise<void> {
   const data = await loadData();
 
   if (Object.keys(data).length === 0) {
-    console.log("Not tracking");
+    console.log("Not configured");
     return;
   }
 
@@ -376,7 +376,7 @@ async function cmdRun(): Promise<void> {
   const data = await loadData();
 
   if (Object.keys(data).length === 0) {
-    console.log("Not tracking, run --add");
+    console.log("Not configured, run --add");
     return;
   }
 
@@ -612,7 +612,7 @@ async function cmdUnschedule(timeStr?: string): Promise<void> {
   const plistFile = Bun.file(PLIST_PATH);
 
   if (!(await plistFile.exists())) {
-    console.log("Not set");
+    console.log("Not configured");
     return;
   }
 
@@ -621,7 +621,7 @@ async function cmdUnschedule(timeStr?: string): Promise<void> {
   const currentTimes = parseTimesFromPlist(content);
 
   if (currentTimes.length === 0) {
-    console.log("No scheduled times found");
+    console.log("Not configured");
     return;
   }
 
@@ -737,7 +737,7 @@ async function cmdStatus(): Promise<void> {
   const plistFile = Bun.file(PLIST_PATH);
 
   if (!(await plistFile.exists())) {
-    console.log("Tasks not set");
+    console.log("Not configured");
     return;
   }
 
@@ -770,7 +770,7 @@ async function cmdWebhook(action?: string, url?: string): Promise<void> {
   // No action: list all webhooks
   if (!action) {
     if (webhookUrls.length === 0) {
-      console.log("No webhooks configured");
+      console.log("Not configured");
     } else {
       console.log(`Webhooks (${webhookUrls.length}):`);
       webhookUrls.forEach((u, i) => console.log(`  ${i + 1}. ${u}`));
@@ -781,7 +781,7 @@ async function cmdWebhook(action?: string, url?: string): Promise<void> {
   // Remove webhook interactively
   if (action === "remove") {
     if (webhookUrls.length === 0) {
-      console.log("No webhooks to remove");
+      console.log("Not configured");
       return;
     }
 
@@ -935,8 +935,8 @@ function printSimpleList(cols: { title: string; items: string[]; more?: string }
     const hasMore = col.items.length > MAX_DISPLAY;
 
     console.log(`${GREEN}${col.title}${RESET}`);
-    if (items.length === 0 || (items.length === 1 && (items[0] === "None" || items[0] === "Not set"))) {
-      console.log(`  ${DIM}${items[0] || "None"}${RESET}`);
+    if (items.length === 0 || (items.length === 1 && items[0] === "Not configured")) {
+      console.log(`  ${DIM}${items[0] || "Not configured"}${RESET}`);
     } else {
       items.forEach(item => console.log(`  ${item}`));
       if (hasMore && col.more) {
@@ -1043,19 +1043,19 @@ async function printHelp(): Promise<void> {
   // Prepare columns
   const filesCol = {
     title: `Files (${fileCount})`,
-    items: fileCount > 0 ? Object.values(data).map(f => f.name) : ["None"],
+    items: fileCount > 0 ? Object.values(data).map(f => f.name) : ["Not configured"],
     more: "ft --list"
   };
 
   const webhooksCol = {
     title: `Webhooks (${webhookCount})`,
-    items: webhookCount > 0 ? webhookUrls : ["None"],
+    items: webhookCount > 0 ? webhookUrls : ["Not configured"],
     more: "ft --webhook"
   };
 
   const scheduleCol = {
     title: `Schedule (${timeCount})`,
-    items: timeCount > 0 ? scheduledTimes : ["Not set"],
+    items: timeCount > 0 ? scheduledTimes : ["Not configured"],
     more: "ft --schedule"
   };
 
