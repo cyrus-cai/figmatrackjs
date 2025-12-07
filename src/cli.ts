@@ -11,12 +11,12 @@
  *   ft --run                    Run immediately
  *   ft --schedule add <HH:MM>   Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
  *   ft --schedule remove        Remove schedule
- *   ft --schedule               List schedule
+ *   ft --schedule list          List schedule
  *
  *   # Webhook
  *   ft --webhook add <URL>      Add webhook (e.g. URL1 URL2 or URL1,URL2)
  *   ft --webhook remove         Remove webhook
- *   ft --webhook                List webhooks
+ *   ft --webhook list           List webhooks
  */
 
 import { $ } from "bun";
@@ -767,8 +767,8 @@ async function cmdWebhook(action?: string, url?: string): Promise<void> {
   const config = await loadConfig();
   const webhookUrls = config.webhook_urls || [];
 
-  // No action: list all webhooks
-  if (!action) {
+  // List all webhooks
+  if (action === "list") {
     if (webhookUrls.length === 0) {
       console.log("Not configured");
     } else {
@@ -875,8 +875,7 @@ async function cmdWebhook(action?: string, url?: string): Promise<void> {
   }
 
   // Unknown action
-  console.log(`Unknown webhook command: ${action}`);
-  console.log("Usage: ft --webhook [add|remove] [URL]");
+  console.log("Unknown command. Use: add, remove, list");
 }
 
 async function getScheduledTimes(): Promise<string[]> {
@@ -1071,12 +1070,12 @@ ${GREEN}Schedule${RESET}
   ft --run                    Run immediately
   ft --schedule add <HH:MM>   Add schedule (e.g. 09:00 18:00 or 09:00,18:00)
   ft --schedule remove        Remove schedule
-  ft --schedule               List schedule
+  ft --schedule list          List schedule
 
 ${GREEN}Webhook${RESET}
   ft --webhook add <URL>      Add webhook (e.g. URL1 URL2 or URL1,URL2)
   ft --webhook remove         Remove webhook
-  ft --webhook                List webhooks
+  ft --webhook list           List webhooks
   `);
 }
 
@@ -1158,11 +1157,10 @@ if (values.list) {
     await cmdSchedule(timeArgs);
   } else if (action === "remove") {
     await cmdUnschedule(scheduleArg.values[1]);
-  } else if (action === "status" || !action) {
+  } else if (action === "list") {
     await cmdStatus();
   } else {
-    // Treat as time string for backward compatibility
-    await cmdSchedule(action);
+    console.log("Unknown command. Use: add, remove, list");
   }
 } else if (webhookArg.has) {
   const action = webhookArg.values[0];
