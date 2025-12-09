@@ -213,16 +213,39 @@ async function sendWebhook(payload: object): Promise<void> {
   });
 }
 
+function formatCompareDate(dateStr: string): string {
+  // Input: "YYYY/MM/DD HH:MM:SS" or "YYYY-MM-DD"
+  // Output: "MM/DD HH:MM" or "MM/DD"
+  if (dateStr.includes("/")) {
+    // Format: YYYY/MM/DD HH:MM:SS
+    const match = dateStr.match(/(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})/);
+    if (match) {
+      return `${match[2]}/${match[3]} ${match[4]}:${match[5]}`;
+    }
+  } else if (dateStr.includes("-")) {
+    // Format: YYYY-MM-DD
+    const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return `${match[2]}/${match[3]}`;
+    }
+  }
+  return dateStr;
+}
+
 function buildMessage(name: string, diff: Diff): string {
-  const lines: string[] = [name];
-  lines.push(`Users: ${diff.user_count}  Likes: ${diff.like_count}`);
+  const indent = "     ";
+  const lines: string[] = [`[${name}]`];
+
+  const u = diff.diff_user !== null ? (diff.diff_user >= 0 ? `(+${diff.diff_user})` : `(${diff.diff_user})`) : "";
+  const l = diff.diff_like !== null ? (diff.diff_like >= 0 ? `(+${diff.diff_like})` : `(${diff.diff_like})`) : "";
+
+  lines.push(`${indent}users:${diff.user_count} ${u}`);
+  lines.push(`${indent}likes:${diff.like_count} ${l}`);
 
   if (diff.compare_date) {
-    const u = diff.diff_user! >= 0 ? `+${diff.diff_user}` : `${diff.diff_user}`;
-    const l = diff.diff_like! >= 0 ? `+${diff.diff_like}` : `${diff.diff_like}`;
-    lines.push(`vs ${diff.compare_date}: Users ${u}, Likes ${l}`);
+    lines.push(`${indent}vs ${formatCompareDate(diff.compare_date)}`);
   } else {
-    lines.push("First record");
+    lines.push(`${indent}First record`);
   }
 
   return lines.join("\n");
@@ -405,7 +428,7 @@ async function cmdRun(): Promise<void> {
       const msg = buildMessage(info.name, diff);
       messages.push(msg);
       console.log(msg);
-      console.log("---");
+      console.log("");
     } catch (e) {
       console.log(`Error ${fileId}: ${e}`);
     }
