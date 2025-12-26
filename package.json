@@ -1,0 +1,33 @@
+{
+  "name": "figmatrackjs",
+  "version": "0.1.12",
+  "description": "Figma Community Stats Tracker - Track your Figma Community file stats with ease",
+  "type": "module",
+  "bin": {
+    "ft": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "bun build src/cli.ts --outdir dist --target bun",
+    "dev": "bun run src/cli.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyrus-cai/figmatrackjs.git"
+  },
+  "keywords": [
+    "figma",
+    "tracker",
+    "stats",
+    "community",
+    "cli"
+  ],
+  "author": "cyrus-cai",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cyrus-cai/figmatrackjs/issues"
+  },
+  "homepage": "https://github.com/cyrus-cai/figmatrackjs#readme",
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
